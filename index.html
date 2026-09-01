@@ -95,8 +95,6 @@ function seedData() {
       { id: "E5", kimden: "İrfan Baba", cins: "24 Ayar (Hesaptaki Paranın Çevrimi)", adet: 160, gram: 160, tarih: null, birimFiyat: 7480, priceType: "gram24", not: null },
       { id: "E6", kimden: "Metin Baba", cins: "Kelepçe", adet: 1, gram: 43.61, tarih: "2026-02-03", birimFiyat: 6670, priceType: "gram22", not: null },
       { id: "E7", kimden: "Metin Baba", cins: "Çeyrek Altın", adet: 35, gram: null, tarih: null, birimFiyat: 11850, priceType: "ceyrek", not: null },
-      { id: "E8", kimden: "Kemal Vural", cins: "22 Ayar Bilezik (Ek Sipariş)", adet: 1, gram: 40, tarih: "2026-06-22", birimFiyat: 5686, priceType: "gram22",
-        not: "Sipariş 22.06.2026, teslim 24.06.2026. Fiyat tahminidir — gerçek fatura fiyatınızı biliyorsanız güncelleyin." },
     ],
     payments: [
       { id: "P1", debtId: "E1", tarih: "2026-04-15", birimFiyat: 5900, tutar: 236000 },
@@ -176,7 +174,11 @@ function findKey(obj, candidates) {
 }
 
 async function fetchTruncgil() {
-  const resp = await fetch("https://finans.truncgil.com/today.json");
+  // Fetched via our own Netlify Function (netlify/functions/gold-price.js), not directly —
+  // finans.truncgil.com does not send CORS headers, so a direct browser fetch fails silently
+  // with a generic network error. A server-to-server call from our own function has no such
+  // restriction (CORS is a browser-only rule), and the browser then talks to our own domain.
+  const resp = await fetch("/.netlify/functions/gold-price");
   if (!resp.ok) throw new Error("Sunucudan yanıt alınamadı (" + resp.status + ")");
   const json = await resp.json();
 
@@ -232,6 +234,14 @@ function setUsername(name) {
 function ensureShape(d) {
   if (!d.kredi.installments) d.kredi.installments = genInstallments(d.kredi);
   if (!d.activity) d.activity = [];
+  // One-time correction: an earlier version mistakenly added a second Kemal Vural debt
+  // (id "E8", "22 Ayar Bilezik (Ek Sipariş)") that never should have existed — confirmed
+  // there is no such separate debt. Remove it (and any payment logged against it) from
+  // whatever's already stored, so this self-heals on next load without manual cleanup.
+  if (d.debts && d.debts.some((deb) => deb.id === "E8")) {
+    d.debts = d.debts.filter((deb) => deb.id !== "E8");
+    d.payments = (d.payments || []).filter((p) => p.debtId !== "E8");
+  }
   return d;
 }
 
@@ -968,7 +978,7 @@ function App() {
             </div>
             <p className="text-xs opacity-50 mt-2">
               Bugünkü altın fiyatları sabit tutularak hesaplanmıştır — yani grafikteki değişim piyasa dalgalanmasından değil,
-              yaptığınız ödemelerden kaynaklanır. Kemal Vural'ın ek 40 gram siparişi (22.06.2026) borcu artıran küçük bir sıçrama olarak görünür.
+              yaptığınız ödemelerden kaynaklanır.
             </p>
           </section>
         )}
