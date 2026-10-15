@@ -249,7 +249,7 @@ function ensureShape(d) {
   // Tek seferlik: Kemal Vural'a 7 Eylül 2026'da 59,5 gram ödendi (kalan 19,75 gram).
   if (!d.migrations.includes(MIG_KEMAL_SEP)) {
     d.migrations.push(MIG_KEMAL_SEP);
-    if ((d.debts || []).some((deb) => deb.id === "E1") && !(d.payments || []).some((p) => p.id === "P2")) {
+    if ((d.debts || []).some((deb) => deb.id === "E1") && !(d.payments || []).some((p) => p.id === "P2" || (p.debtId === "E1" && p.tarih === "2026-09-07"))) {
       d.payments = [...(d.payments || []), { id: "P2", debtId: "E1", tarih: "2026-09-07", miktar: 59.5 }];
     }
   }

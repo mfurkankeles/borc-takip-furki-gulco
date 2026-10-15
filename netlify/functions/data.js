@@ -1,4 +1,5 @@
-const { getStore } = require("@netlify/blobs");
+const blobs = require("@netlify/blobs");
+const { getStore } = blobs;
 
 const STORE_NAME = "ev-hesabi";
 const KEY = "shared";
@@ -10,6 +11,10 @@ exports.handler = async (event) => {
   };
 
   try {
+    // Klasik (exports.handler) fonksiyonlarda Blobs bağlantısı event üzerinden kurulmalı.
+    // Bu çağrı olmadan getStore "ortam Blobs için yapılandırılmamış" hatası verir ve
+    // site sessizce sadece-tarayıcı (yerel) moduna düşer — kayıtlar cihazlar arası paylaşılmaz.
+    if (event && event.blobs && typeof blobs.connectLambda === "function") blobs.connectLambda(event);
     const store = getStore(STORE_NAME);
 
     if (event.httpMethod === "GET") {
