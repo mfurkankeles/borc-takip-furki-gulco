@@ -2,8 +2,9 @@
   "name": "ev-hesabi",
   "version": "1.0.0",
   "private": true,
-  "description": "Ev Hesabı — kalan borç takibi (statik site + Netlify Function)",
+  "description": "Ev Hesab\u0131 \u2014 kalan bor\u00e7 takibi (statik site + Netlify Function)",
   "dependencies": {
-    "@netlify/blobs": "latest"
+    "@netlify/blobs": "latest",
+    "socket.io-client": "^4.7.5"
   }
 }

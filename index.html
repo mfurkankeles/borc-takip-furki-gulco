@@ -184,6 +184,16 @@ async function fetchTruncgil() {
   if (!resp.ok) throw new Error("Sunucudan yanıt alınamadı (" + resp.status + ")");
   const json = await resp.json();
 
+  // Harem Altın kaynağı: fonksiyon zaten bizim anahtarlarımızla hazır fiyat döndürür.
+  if (json && json._source === "haremaltin" && json.prices) {
+    return {
+      result: json.prices,
+      usedFallback: json.fallback || {},
+      guncellemeTarihiRaw: json.tarih || null,
+      source: "Harem Altın",
+    };
+  }
+
   const wanted = {
     gram22: ["22 Ayar Bilezik"],
     gram24: ["Gram Altın"],
@@ -207,7 +217,7 @@ async function fetchTruncgil() {
     }
   }
   const guncellemeTarihiRaw = json["Güncelleme Tarihi"] || json["update_date"] || json["Update_Date"] || null;
-  return { result, usedFallback, guncellemeTarihiRaw };
+  return { result, usedFallback, guncellemeTarihiRaw, source: "Truncgil (yedek kaynak)" };
 }
 
 function loadData() {
@@ -745,7 +755,7 @@ function App() {
     setFetchError(null);
     setShowingSnapshot(false);
     try {
-      const { result, usedFallback, guncellemeTarihiRaw } = await fetchTruncgil();
+      const { result, usedFallback, guncellemeTarihiRaw, source } = await fetchTruncgil();
       const now = guncellemeTarihiRaw ? new Date(guncellemeTarihiRaw.replace(" ", "T")) : new Date();
       const withinHours = isBusinessHours(now);
       setOffHoursWarning(!withinHours);
@@ -760,7 +770,7 @@ function App() {
           detail[key] = result[key];
         }
       }
-      setLastFetchDetail({ detail, tarih: lastUpdatedIso, usedFallback, withinHours });
+      setLastFetchDetail({ detail, tarih: lastUpdatedIso, usedFallback, withinHours, source });
 
       const next = { ...data, goldPrices: nextPrices };
       persist(next, "Canlı altın fiyatlarını çekti");
@@ -1025,8 +1035,8 @@ function App() {
           </div>
           <p className="text-sm opacity-70 my-3">
             ℹ️ "Canlı Fiyatı Çek" piyasadan <strong>satış</strong> fiyatını otomatik çeker (borcu kapatmak için altın almanız gerekseydi ödeyeceğiniz fiyat).
-            Ödediğiniz zamanki fiyat bundan ayrı ve sabit kalır: her ödemeyi Ödeme Geçmişi'ndeki formda o günün fiyatıyla girip sabitliyorsunuz.
-            Son güncelleme: {fmtDateTime(data.goldPrices.lastUpdated)}
+            Ödemeler gram/adet olarak kaydedilir; kalan borcun TL karşılığı her zaman güncel fiyatla hesaplanır.
+            Son güncelleme: {fmtDateTime(data.goldPrices.lastUpdated)}{lastFetchDetail && lastFetchDetail.source ? ` · Kaynak: ${lastFetchDetail.source}` : ""}
             {showingSnapshot && <span> · <em>son mesai içi kayıt gösteriliyor</em></span>}.
           </p>
 
