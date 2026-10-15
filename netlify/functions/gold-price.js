@@ -70,9 +70,15 @@ function haremDateToIso(s) {
 exports.handler = async () => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 
+  // Yedek kaynağı baştan paralel başlatıyoruz: Harem Altın 8 sn'ye kadar beklenir (öncelikli),
+  // olmazsa yedek zaten hazır olur ve toplam süre Netlify'ın 10 sn sınırını aşmaz.
+  const backupPromise = fetch("https://finans.truncgil.com/today.json")
+    .then(async (r) => (r.ok ? { ok: true, data: await r.json() } : { ok: false, status: r.status }))
+    .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+
   // 1) Harem Altın
   try {
-    const { got, latestTarih } = await fetchHarem(5000);
+    const { got, latestTarih } = await fetchHarem(8000);
     const tarih = haremDateToIso(latestTarih);
     // Türkiye saati (UTC+3) — sunucu UTC'de çalışır, bu yüzden elle çeviriyoruz
     const trNow = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -88,15 +94,14 @@ exports.handler = async () => {
     };
   } catch (haremErr) {
     // 2) Yedek: Truncgil
-    try {
-      const resp = await fetch("https://finans.truncgil.com/today.json");
-      if (!resp.ok) {
-        return { statusCode: 502, headers, body: JSON.stringify({ error: "Harem Altın: " + haremErr.message + " | Truncgil HTTP " + resp.status }) };
-      }
-      const data = await resp.json();
-      return { statusCode: 200, headers, body: JSON.stringify({ ...data, _source: "truncgil", _haremError: haremErr.message }) };
-    } catch (e) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: "Harem Altın: " + haremErr.message + " | Truncgil: " + String((e && e.message) || e) }) };
+    const backup = await backupPromise;
+    if (backup.ok) {
+      return { statusCode: 200, headers, body: JSON.stringify({ ...backup.data, _source: "truncgil", _haremError: haremErr.message }) };
     }
+    return {
+      statusCode: 502,
+      headers,
+      body: JSON.stringify({ error: "Harem Altın: " + haremErr.message + " | Truncgil: " + (backup.error || "HTTP " + backup.status) }),
+    };
   }
 };
