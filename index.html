@@ -97,7 +97,8 @@ function seedData() {
       { id: "E7", kimden: "Metin Baba", cins: "Çeyrek Altın", adet: 35, gram: null, tarih: null, birimFiyat: 11850, priceType: "ceyrek", not: null },
     ],
     payments: [
-      { id: "P1", debtId: "E1", tarih: "2026-04-15", birimFiyat: 5900, tutar: 236000 },
+      { id: "P1", debtId: "E1", tarih: "2026-04-15", miktar: 40 },
+      { id: "P2", debtId: "E1", tarih: "2026-09-07", miktar: 59.5 },
     ],
     kredi: {
       anapara: 500000, vade: 21, taksitTutari: 42415, ilkTaksitTarihi: "2026-06-03",
@@ -105,6 +106,7 @@ function seedData() {
     },
     avans: { tutar: 600000, odendi: true, odemeTarihi: "2026-03-01" },
     activity: [],
+    migrations: ["kemal-2026-09-07"],
   };
 }
 
@@ -231,9 +233,26 @@ function setUsername(name) {
   try { localStorage.setItem(USERNAME_KEY, name); } catch (e) {}
 }
 
+// Bir ödemenin gram/adet miktarı. Yeni kayıtlar doğrudan "miktar" tutar;
+// eski kayıtlar (tutar / birimFiyat) için geriye dönük hesap yapılır.
+function payQty(p) {
+  if (p.miktar != null) return Number(p.miktar) || 0;
+  return p.birimFiyat ? p.tutar / p.birimFiyat : 0;
+}
+
+const MIG_KEMAL_SEP = "kemal-2026-09-07";
+
 function ensureShape(d) {
   if (!d.kredi.installments) d.kredi.installments = genInstallments(d.kredi);
   if (!d.activity) d.activity = [];
+  if (!d.migrations) d.migrations = [];
+  // Tek seferlik: Kemal Vural'a 7 Eylül 2026'da 59,5 gram ödendi (kalan 19,75 gram).
+  if (!d.migrations.includes(MIG_KEMAL_SEP)) {
+    d.migrations.push(MIG_KEMAL_SEP);
+    if ((d.debts || []).some((deb) => deb.id === "E1") && !(d.payments || []).some((p) => p.id === "P2")) {
+      d.payments = [...(d.payments || []), { id: "P2", debtId: "E1", tarih: "2026-09-07", miktar: 59.5 }];
+    }
+  }
   // One-time correction: an earlier version mistakenly added a second Kemal Vural debt
   // (id "E8", "22 Ayar Bilezik (Ek Sipariş)") that never should have existed — confirmed
   // there is no such separate debt. Remove it (and any payment logged against it) from
@@ -284,7 +303,7 @@ function buildTrend(data) {
     events.push({ date: activationDate, cat: "emanet", delta: orig * price });
   });
   data.payments.forEach((p) => {
-    const qty = p.birimFiyat ? p.tutar / p.birimFiyat : 0;
+    const qty = payQty(p);
     const debt = data.debts.find((d) => d.id === p.debtId);
     if (!debt) return;
     const price = priceFor(debt.priceType);
@@ -554,7 +573,7 @@ function App() {
   const [openPerson, setOpenPerson] = useState({});
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showKrediSettings, setShowKrediSettings] = useState(false);
-  const [paymentDraft, setPaymentDraft] = useState({ debtId: "", tarih: "", birimFiyat: "", tutar: "" });
+  const [paymentDraft, setPaymentDraft] = useState({ debtId: "", tarih: "", miktar: "" });
   const [saveState, setSaveState] = useState("idle");
   const [celebrate, setCelebrate] = useState(null); // id string when something just closed
   const [fetchingPrices, setFetchingPrices] = useState(false);
@@ -598,9 +617,11 @@ function App() {
         sharedModeRef.current = true;
         if (remote) {
           if (!dataRef.current || remote.updatedAt !== dataRef.current.updatedAt) {
+            const needsPush = !(remote.migrations || []).includes(MIG_KEMAL_SEP);
             const shaped = ensureShape(remote);
             setData(shaped);
             saveData(shaped);
+            if (needsPush) saveShared({ ...shaped, updatedAt: new Date().toISOString() }).catch(() => {});
           }
         } else {
           // sunucuda henüz veri yok (ilk kullanım) — kendi verimizle başlatalım
@@ -669,7 +690,7 @@ function App() {
     if (!data) return null;
     const paidQty = {};
     for (const p of data.payments) {
-      const q = p.birimFiyat ? p.tutar / p.birimFiyat : 0;
+      const q = payQty(p);
       paidQty[p.debtId] = (paidQty[p.debtId] || 0) + q;
     }
     const debtRows = data.debts.map((d) => {
@@ -807,15 +828,15 @@ function App() {
   };
 
   const addPayment = () => {
-    if (!paymentDraft.debtId || !paymentDraft.tarih || !paymentDraft.birimFiyat || !paymentDraft.tutar) return;
-    const p = { id: "P" + Date.now(), debtId: paymentDraft.debtId, tarih: paymentDraft.tarih,
-      birimFiyat: parseFloat(paymentDraft.birimFiyat), tutar: parseFloat(paymentDraft.tutar) };
+    const miktar = parseFloat(String(paymentDraft.miktar).replace(",", "."));
+    if (!paymentDraft.debtId || !paymentDraft.tarih || !(miktar > 0)) return;
+    const p = { id: "P" + Date.now(), debtId: paymentDraft.debtId, tarih: paymentDraft.tarih, miktar };
     const nextData = { ...data, payments: [...data.payments, p] };
 
     // celebrate if this closes out the person's full debt
     const paidQty = {};
     for (const pay of nextData.payments) {
-      const q = pay.birimFiyat ? pay.tutar / pay.birimFiyat : 0;
+      const q = payQty(pay);
       paidQty[pay.debtId] = (paidQty[pay.debtId] || 0) + q;
     }
     const debt = nextData.debts.find((d) => d.id === p.debtId);
@@ -829,9 +850,9 @@ function App() {
       if (personFullyPaid) { setCelebrate(debt.kimden); setTimeout(() => setCelebrate(null), 1200); }
     }
 
-    persist(nextData, debt ? `${debt.kimden}'a ${fmtTRY(p.tutar)} ödeme ekledi` : "Ödeme ekledi");
+    persist(nextData, debt ? `${debt.kimden}'a ${fmtNum(p.miktar)} ${debt.gram != null ? "gram" : "adet"} ödeme ekledi` : "Ödeme ekledi");
     showToast("Ödeme kaydedildi");
-    setPaymentDraft({ debtId: "", tarih: "", birimFiyat: "", tutar: "" });
+    setPaymentDraft({ debtId: "", tarih: "", miktar: "" });
     setShowPaymentForm(false);
   };
 
@@ -864,8 +885,11 @@ function App() {
     reader.readAsText(file);
   };
 
-  const draftMiktar = paymentDraft.birimFiyat && paymentDraft.tutar
-    ? parseFloat(paymentDraft.tutar) / parseFloat(paymentDraft.birimFiyat) : null;
+  const draftDebt = data && data.debts.find((d) => d.id === paymentDraft.debtId);
+  const draftUnit = draftDebt ? (draftDebt.gram != null ? "gram" : "adet") : "gram/adet";
+  const draftRow = calc && calc.debtRows ? calc.debtRows.find((r) => r.id === paymentDraft.debtId) : null;
+  const draftMiktar = parseFloat(String(paymentDraft.miktar).replace(",", "."));
+  const draftKalan = draftRow && draftMiktar > 0 ? Math.max(0, draftRow.kalan - draftMiktar) : null;
 
   const syncLabel = {
     connecting: "🟡 Bağlanıyor…",
@@ -916,7 +940,7 @@ function App() {
             <div className="rounded-lg p-6 max-w-sm w-full" style={{ background: PAPER }}>
               <h2 className="serif text-xl mb-2">Ödemeyi sil?</h2>
               <p className="text-sm opacity-70 mb-4">
-                {debt ? `${debt.kimden} — ${debt.cins}` : "Bu ödeme"} kaydını ({p ? fmtTRY(p.tutar) : ""}, {p ? fmtDate(p.tarih) : ""}) silmek
+                {debt ? `${debt.kimden} — ${debt.cins}` : "Bu ödeme"} kaydını ({p ? `${fmtNum(payQty(p))} ${debt && debt.gram == null ? "adet" : "gram"}` : ""}, {p ? fmtDate(p.tarih) : ""}) silmek
                 istediğinize emin misiniz? Bu işlem geri alınamaz.
               </p>
               <div className="flex gap-2">
@@ -1119,18 +1143,13 @@ function App() {
                   <input type="date" value={paymentDraft.tarih} onChange={(e) => setPaymentDraft((d) => ({ ...d, tarih: e.target.value }))}
                     className="border rounded px-2 py-1.5" style={{ borderColor: LINE }} />
                 </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="opacity-60 text-xs">O Tarihteki Birim Fiyat (₺)</span>
-                  <input type="number" value={paymentDraft.birimFiyat} onChange={(e) => setPaymentDraft((d) => ({ ...d, birimFiyat: e.target.value }))}
-                    className="border rounded px-2 py-1.5 tab-num" style={{ borderColor: LINE }} />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="opacity-60 text-xs">Ödenen Tutar (₺)</span>
-                  <input type="number" value={paymentDraft.tutar} onChange={(e) => setPaymentDraft((d) => ({ ...d, tutar: e.target.value }))}
-                    className="border rounded px-2 py-1.5 tab-num" style={{ borderColor: LINE }} />
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                  <span className="opacity-60 text-xs">Ödenen Miktar ({draftUnit})</span>
+                  <input type="number" inputMode="decimal" step="any" min="0" value={paymentDraft.miktar} onChange={(e) => setPaymentDraft((d) => ({ ...d, miktar: e.target.value }))}
+                    className="border rounded px-2 py-1.5 tab-num" style={{ borderColor: LINE }} placeholder="örn. 59,5" />
                 </label>
               </div>
-              <p className="text-xs opacity-60">Hesaplanan miktar: {draftMiktar ? `${fmtNum(draftMiktar)} gram/adet` : "—"}</p>
+              <p className="text-xs opacity-60">{draftKalan != null ? `Bu ödemeden sonra kalan: ${fmtNum(draftKalan)} ${draftUnit}` : "Yalnızca ödenen gram/adet girilir."}</p>
               <div className="flex gap-2">
                 <button onClick={addPayment} className="text-sm px-4 py-1.5 rounded-full" style={{ background: GOLD, color: "#fff" }}>Kaydet</button>
                 <button onClick={() => setShowPaymentForm(false)} className="text-sm px-4 py-1.5 rounded-full border" style={{ borderColor: LINE }}>Vazgeç</button>
@@ -1142,15 +1161,16 @@ function App() {
             {data.payments.length === 0 && <p className="text-sm opacity-50">Henüz ödeme kaydı yok.</p>}
             {data.payments.map((p) => {
               const debt = data.debts.find((d) => d.id === p.debtId);
-              const miktar = p.birimFiyat ? p.tutar / p.birimFiyat : 0;
+              const miktar = payQty(p);
+              const unit = debt && debt.gram == null ? "adet" : "gram";
               return (
                 <div key={p.id} className="flex items-center justify-between text-sm border-b py-2" style={{ borderColor: "#EDE6D0" }}>
                   <div>
                     <p>{debt ? `${debt.kimden} — ${debt.cins}` : p.debtId}</p>
-                    <p className="opacity-60 text-xs">{fmtDate(p.tarih)} · {fmtTRY(p.birimFiyat)}/gram-adet · {fmtNum(miktar)} gram/adet</p>
+                    <p className="opacity-60 text-xs">{fmtDate(p.tarih)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="tab-num">{fmtTRY(p.tutar)}</span>
+                    <span className="tab-num">{fmtNum(miktar)} {unit}</span>
                     <button onClick={() => requestRemovePayment(p.id)} className="opacity-40 hover:opacity-80" title="Sil">✕</button>
                   </div>
                 </div>
