@@ -586,6 +586,9 @@ function App() {
   const [data, setData] = useState(null);
   const [openPerson, setOpenPerson] = useState({});
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // "Hepsini kapatıp ek altın alırsam" senaryosu (yalnızca hesap; kayıt oluşturmaz)
+  const [scenGram, setScenGram] = useState("30");
+  const [scenIscilik, setScenIscilik] = useState("0");
   const [showKrediSettings, setShowKrediSettings] = useState(false);
   const [paymentDraft, setPaymentDraft] = useState({ debtId: "", tarih: "", miktar: "" });
   const [saveState, setSaveState] = useState("idle");
@@ -1130,6 +1133,42 @@ function App() {
               </div>
             );})}
           </div>
+        </section>
+
+        {/* Senaryo: tüm emanetleri kapat + ek 22 ayar bilezik */}
+        <section>
+          <SectionHeader title="Senaryo — Tüm Emanetleri Kapatıp Bilezik Alırsam" />
+          {(() => {
+            const g = parseFloat(String(scenGram).replace(",", ".")) || 0;
+            const isc = parseFloat(String(scenIscilik).replace(",", ".")) || 0;
+            const unit = data.goldPrices.gram22;
+            const alim = g * (unit + isc);
+            const toplam = calc.emanetTotal + alim;
+            return (
+              <div className="border rounded-lg p-4 space-y-3" style={{ borderColor: LINE, background: PAPER }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="opacity-60 text-xs">Ek alınacak 22 ayar bilezik (gram)</span>
+                    <input type="number" inputMode="decimal" step="any" min="0" value={scenGram} onChange={(e) => setScenGram(e.target.value)}
+                      className="border rounded px-2 py-2.5 tab-num" style={{ borderColor: LINE }} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="opacity-60 text-xs">İşçilik (₺/gram) — işçiliksizse 0</span>
+                    <input type="number" inputMode="decimal" step="any" min="0" value={scenIscilik} onChange={(e) => setScenIscilik(e.target.value)}
+                      className="border rounded px-2 py-2.5 tab-num" style={{ borderColor: LINE }} />
+                  </label>
+                </div>
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between"><span className="opacity-70">Kalan emanetlerin tamamı</span><span className="tab-num">{fmtTRY(calc.emanetTotal)}</span></div>
+                  <div className="flex justify-between"><span className="opacity-70">{fmtNum(g)} gram 22 ayar bilezik ({fmtTRY(unit)}{isc ? ` + ${fmtTRY(isc)} işçilik` : ""}/gram)</span><span className="tab-num">{fmtTRY(alim)}</span></div>
+                  <div className="flex justify-between pt-2 border-t font-medium" style={{ borderColor: LINE }}>
+                    <span>İhtiyaç duyulan toplam</span><span className="tab-num serif text-lg" style={{ color: GOLD }}>{fmtTRY(toplam)}</span>
+                  </div>
+                </div>
+                <p className="text-xs opacity-50">Güncel satış fiyatlarıyla hesaplanır (kredi ve avans dahil değil). Bilezik fiyatı kuyumcuya göre değişir; kuyumcunun işçilik farkını yukarı girin.</p>
+              </div>
+            );
+          })()}
         </section>
 
         {/* Payments */}
