@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Ev Hesabı — Kalan Borç Takibi</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,6 +16,10 @@
   .serif { font-family: 'Fraunces', serif; }
   body, input, select, button { font-family: 'IBM Plex Sans', sans-serif; }
   .tab-num { font-variant-numeric: tabular-nums; }
+  html { -webkit-text-size-adjust: 100%; }
+  /* iOS Safari 16px altındaki alanlara odaklanınca sayfayı yakınlaştırır; telefonda engelle */
+  @media (max-width: 640px) { input, select, textarea { font-size: 16px; } }
+  button { touch-action: manipulation; }
   input[type=number]::-webkit-outer-spin-button,
   input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=number] { -moz-appearance: textfield; }
@@ -936,8 +940,8 @@ function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 text-sm px-4 py-2 rounded-full shadow-lg"
-             style={{ background: INK, color: CREAM }}>
+        <div className="fixed left-1/2 -translate-x-1/2 z-50 text-sm px-4 py-2 rounded-full shadow-lg"
+             style={{ background: INK, color: CREAM, bottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}>
           {toast}
         </div>
       )}
@@ -1132,7 +1136,7 @@ function App() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <SectionHeader title="Ödeme Geçmişi" noMargin />
-            <button onClick={() => setShowPaymentForm((s) => !s)} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-full" style={{ background: INK, color: CREAM }}>
+            <button onClick={() => setShowPaymentForm((s) => !s)} className="flex items-center gap-1 text-sm px-4 py-2.5 rounded-full" style={{ background: INK, color: CREAM }}>
               + Ödeme Ekle
             </button>
           </div>
@@ -1143,7 +1147,7 @@ function App() {
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="opacity-60 text-xs">Hangi Borç</span>
                   <select value={paymentDraft.debtId} onChange={(e) => setPaymentDraft((d) => ({ ...d, debtId: e.target.value }))}
-                    className="border rounded px-2 py-1.5" style={{ borderColor: LINE }}>
+                    className="border rounded px-2 py-2.5" style={{ borderColor: LINE }}>
                     <option value="">Seçin…</option>
                     {data.debts.map((d) => <option key={d.id} value={d.id}>{d.kimden} — {d.cins}</option>)}
                   </select>
@@ -1161,8 +1165,8 @@ function App() {
               </div>
               <p className="text-xs opacity-60">{draftKalan != null ? `Bu ödemeden sonra kalan: ${fmtNum(draftKalan)} ${draftUnit}` : "Yalnızca ödenen gram/adet girilir."}</p>
               <div className="flex gap-2">
-                <button onClick={addPayment} className="text-sm px-4 py-1.5 rounded-full" style={{ background: GOLD, color: "#fff" }}>Kaydet</button>
-                <button onClick={() => setShowPaymentForm(false)} className="text-sm px-4 py-1.5 rounded-full border" style={{ borderColor: LINE }}>Vazgeç</button>
+                <button onClick={addPayment} className="text-sm px-5 py-2.5 rounded-full" style={{ background: GOLD, color: "#fff" }}>Kaydet</button>
+                <button onClick={() => setShowPaymentForm(false)} className="text-sm px-5 py-2.5 rounded-full border" style={{ borderColor: LINE }}>Vazgeç</button>
               </div>
             </div>
           )}
@@ -1181,7 +1185,7 @@ function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="tab-num">{fmtNum(miktar)} {unit}</span>
-                    <button onClick={() => requestRemovePayment(p.id)} className="opacity-40 hover:opacity-80" title="Sil">✕</button>
+                    <button onClick={() => requestRemovePayment(p.id)} className="opacity-50 hover:opacity-80 -mr-2 w-11 h-11 flex items-center justify-center" title="Sil" aria-label="Ödemeyi sil">✕</button>
                   </div>
                 </div>
               );
