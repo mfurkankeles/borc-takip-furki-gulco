@@ -475,7 +475,7 @@ function SectionHeader({ title, noMargin }) {
   return <h2 className={`serif text-xl ${noMargin ? "" : "mb-4"}`} style={{ color: INK }}>{title}</h2>;
 }
 
-function BreakdownCard({ emoji, label, value, sub, closed }) {
+function BreakdownCard({ emoji, label, value, sub, closed, altLabel, altValue }) {
   return (
     <div className="border rounded-lg p-4 relative" style={{ borderColor: LINE, background: PAPER }}>
       <div className="flex items-center gap-1.5 text-xs opacity-60 mb-1">
@@ -483,6 +483,12 @@ function BreakdownCard({ emoji, label, value, sub, closed }) {
       </div>
       <p className="serif text-2xl tab-num" style={{ color: INK }}>{fmtTRY(value)}</p>
       <p className="text-xs opacity-50 mt-0.5">{sub}</p>
+      {altValue != null && Math.abs(altValue - value) >= 1 && (
+        <div className="mt-2 pt-2 border-t" style={{ borderColor: "#EDE6D0" }}>
+          <p className="text-xs opacity-60">{altLabel}</p>
+          <p className="serif text-xl tab-num" style={{ color: GOLD }}>{fmtTRY(altValue)}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1035,7 +1041,7 @@ function App() {
         )}
 
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <BreakdownCard emoji="🪙" label="Emanetler" value={calc.emanetTotal} sub="3 kişiye borç" closed={calc.emanetTotal < 1} />
+          <BreakdownCard emoji="🪙" label="Emanetler · gram altınla" value={calc.emanetTotal} sub="3 kişiye borç" closed={calc.emanetTotal < 1} altLabel="Hesaptaki para direkt TL (sabit)" altValue={calc.emanetTotalTL} />
           <div className="relative">
             {celebrate === "avans" && <Confetti />}
             <BreakdownCard emoji="🤝" label="Avans (Insider)" value={calc.avansKalan} sub={data.avans.odendi ? "Ödendi" : "Ödenmedi"} closed={data.avans.odendi} />
