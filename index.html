@@ -96,7 +96,7 @@ function seedData() {
       { id: "E2", kimden: "İrfan Baba", cins: "Reşat Altın", adet: 1, gram: null, tarih: "2026-02-04", birimFiyat: 49000, priceType: "resat", not: null },
       { id: "E3", kimden: "İrfan Baba", cins: "Çeyrek Altın", adet: 15, gram: null, tarih: "2026-02-04", birimFiyat: 12155, priceType: "ceyrek", not: null },
       { id: "E4", kimden: "İrfan Baba", cins: "24 Ayar Gram Altın", adet: 10, gram: 10, tarih: null, birimFiyat: 7480, priceType: "gram24", not: null },
-      { id: "E5", kimden: "İrfan Baba", cins: "24 Ayar (Hesaptaki Paranın Çevrimi)", adet: 160, gram: 160, tarih: null, birimFiyat: 7480, priceType: "gram24", not: null },
+      { id: "E5", kimden: "İrfan Baba", cins: "24 Ayar (Hesaptaki Paranın Çevrimi)", adet: 160, gram: 160, tarih: null, birimFiyat: 7480, priceType: "gram24", sabitTutar: 1196800, not: null },
       { id: "E6", kimden: "Metin Baba", cins: "Kelepçe", adet: 1, gram: 43.61, tarih: "2026-02-03", birimFiyat: 6670, priceType: "gram22", not: null },
       { id: "E7", kimden: "Metin Baba", cins: "Çeyrek Altın", adet: 35, gram: null, tarih: null, birimFiyat: 11850, priceType: "ceyrek", not: null },
     ],
@@ -110,7 +110,7 @@ function seedData() {
     },
     avans: { tutar: 600000, odendi: true, odemeTarihi: "2026-03-01" },
     activity: [],
-    migrations: ["kemal-2026-09-07"],
+    migrations: ["kemal-2026-09-07", "e5-sabit-tl-1196800"],
   };
 }
 
@@ -255,12 +255,20 @@ function payQty(p) {
 }
 
 const MIG_KEMAL_SEP = "kemal-2026-09-07";
+const MIG_E5_TL = "e5-sabit-tl-1196800";
+const ALL_MIGRATIONS = [MIG_KEMAL_SEP, MIG_E5_TL];
 
 function ensureShape(d) {
   if (!d.kredi.installments) d.kredi.installments = genInstallments(d.kredi);
   if (!d.activity) d.activity = [];
   if (!d.migrations) d.migrations = [];
   // Tek seferlik: Kemal Vural'a 7 Eylül 2026'da 59,5 gram ödendi (kalan 19,75 gram).
+  // Tek seferlik: "Hesaptaki Paranın Çevrimi" (E5) için sabit TL karşılığı 1.196.800 ₺.
+  if (!d.migrations.includes(MIG_E5_TL)) {
+    d.migrations.push(MIG_E5_TL);
+    const e5 = (d.debts || []).find((deb) => deb.id === "E5");
+    if (e5 && e5.sabitTutar == null) e5.sabitTutar = 1196800;
+  }
   if (!d.migrations.includes(MIG_KEMAL_SEP)) {
     d.migrations.push(MIG_KEMAL_SEP);
     if ((d.debts || []).some((deb) => deb.id === "E1") && !(d.payments || []).some((p) => p.id === "P2" || (p.debtId === "E1" && p.tarih === "2026-09-07"))) {
@@ -634,7 +642,7 @@ function App() {
         sharedModeRef.current = true;
         if (remote) {
           if (!dataRef.current || remote.updatedAt !== dataRef.current.updatedAt) {
-            const needsPush = !(remote.migrations || []).includes(MIG_KEMAL_SEP);
+            const needsPush = ALL_MIGRATIONS.some((m) => !(remote.migrations || []).includes(m));
             const shaped = ensureShape(remote);
             setData(shaped);
             saveData(shaped);
@@ -717,15 +725,19 @@ function App() {
       const price = data.goldPrices[d.priceType];
       const kalanValue = kalan * price;
       const unit = d.gram != null ? "gram" : "adet";
-      return { ...d, original, paid, kalan, price, kalanValue, unit, ratio: original ? paid / original : 0 };
+      // Sabit TL karşılığı olan kalem (E5): ödenen miktar oranında azalır
+      const sabitValue = d.sabitTutar != null && original > 0 ? d.sabitTutar * (kalan / original) : null;
+      return { ...d, original, paid, kalan, price, kalanValue, sabitValue, unit, ratio: original ? paid / original : 0 };
     });
     const byPerson = {};
     for (const r of debtRows) {
-      byPerson[r.kimden] = byPerson[r.kimden] || { items: [], total: 0 };
+      byPerson[r.kimden] = byPerson[r.kimden] || { items: [], total: 0, totalTL: 0 };
       byPerson[r.kimden].items.push(r);
       byPerson[r.kimden].total += r.kalanValue;
+      byPerson[r.kimden].totalTL += r.sabitValue != null ? r.sabitValue : r.kalanValue;
     }
     const emanetTotal = debtRows.reduce((s, r) => s + r.kalanValue, 0);
+    const emanetTotalTL = debtRows.reduce((s, r) => s + (r.sabitValue != null ? r.sabitValue : r.kalanValue), 0);
 
     const installments = data.kredi.installments;
     const odenenSayisi = installments.filter((i) => i.odendi).length;
@@ -736,8 +748,9 @@ function App() {
 
     const avansKalan = data.avans.odendi ? 0 : data.avans.tutar;
     const toplamKalanBorc = emanetTotal + avansKalan + krediKalan;
+    const toplamKalanBorcTL = emanetTotalTL + avansKalan + krediKalan;
 
-    return { debtRows, byPerson, emanetTotal, odenenSayisi, kalanSayisi, odenenTutar, toplamGeriOdeme, krediKalan, avansKalan, toplamKalanBorc };
+    return { debtRows, byPerson, emanetTotal, emanetTotalTL, toplamKalanBorcTL, odenenSayisi, kalanSayisi, odenenTutar, toplamGeriOdeme, krediKalan, avansKalan, toplamKalanBorc };
   }, [data]);
 
   const trendPoints = useMemo(() => (data ? buildTrend(data) : null), [data]);
@@ -990,13 +1003,36 @@ function App() {
             <p className="text-xs opacity-50 mt-1">{syncLabel}{username && ` · ${username} olarak`}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs opacity-60">Toplam kalan borç</p>
+            <p className="text-xs opacity-60">Toplam kalan borç · gram altınla</p>
             <p className="serif text-2xl md:text-3xl tab-num" style={{ color: GOLD }}>{fmtTRY(calc.toplamKalanBorc)}</p>
           </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">
+
+        {calc.toplamKalanBorcTL !== calc.toplamKalanBorc && (
+          <section>
+            <SectionHeader title="Toplam Borç — İki Görünüm" />
+            <div className="border rounded-lg p-4 space-y-3" style={{ borderColor: LINE, background: PAPER }}>
+              <div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm">1 · Tamamı gram altınla</p>
+                  <p className="serif text-xl tab-num whitespace-nowrap shrink-0" style={{ color: GOLD }}>{fmtTRY(calc.toplamKalanBorc)}</p>
+                </div>
+                <p className="text-xs opacity-55 mt-0.5">Hesaptaki paranın çevrimi de gramdan hesaplanır (güncel fiyatla). Emanet {fmtTRY(calc.emanetTotal)} · Kredi {fmtTRY(calc.krediKalan)} · Avans {fmtTRY(calc.avansKalan)}</p>
+              </div>
+              <div className="border-t pt-3" style={{ borderColor: "#EDE6D0" }}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm">2 · Hesaptaki para direkt TL (sabit)</p>
+                  <p className="serif text-xl tab-num whitespace-nowrap shrink-0" style={{ color: GOLD }}>{fmtTRY(calc.toplamKalanBorcTL)}</p>
+                </div>
+                <p className="text-xs opacity-55 mt-0.5">Hesaptaki para sabit TL olarak alınır, diğer emanetler gram altınla. Emanet {fmtTRY(calc.emanetTotalTL)} · Kredi {fmtTRY(calc.krediKalan)} · Avans {fmtTRY(calc.avansKalan)}</p>
+              </div>
+              <p className="text-xs opacity-60">Fark: {calc.toplamKalanBorcTL > calc.toplamKalanBorc ? "+" : "−"}{fmtTRY(Math.abs(calc.toplamKalanBorcTL - calc.toplamKalanBorc))} (TL sabitli görünüm {calc.toplamKalanBorcTL > calc.toplamKalanBorc ? "daha yüksek" : "daha düşük"})</p>
+            </div>
+          </section>
+        )}
 
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <BreakdownCard emoji="🪙" label="Emanetler" value={calc.emanetTotal} sub="3 kişiye borç" closed={calc.emanetTotal < 1} />
@@ -1109,7 +1145,12 @@ function App() {
                     <span className="font-medium">{name}</span>
                     {closed && <Trophy />}
                   </span>
-                  <span className="serif text-lg tab-num" style={{ color: closed ? GOOD : GOLD }}>{fmtTRY(group.total)}</span>
+                  <span className="text-right">
+                    <span className="serif text-lg tab-num block" style={{ color: closed ? GOOD : GOLD }}>{fmtTRY(group.total)}</span>
+                    {Math.abs(group.totalTL - group.total) >= 1 && (
+                      <span className="text-xs opacity-60 tab-num block">TL sabitle: {fmtTRY(group.totalTL)}</span>
+                    )}
+                  </span>
                 </button>
                 {openPerson[name] && (
                   <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: "#EDE6D0" }}>
@@ -1126,6 +1167,15 @@ function App() {
                           <p className="tab-num shrink-0 pl-3">{fmtTRY(it.kalanValue)}</p>
                         </div>
                         <MiniBar ratio={it.ratio} />
+                        {it.sabitValue != null && (
+                          <div className="mt-2 rounded-md px-3 py-2 flex items-center justify-between gap-3" style={{ background: "#F6F1E4" }}>
+                            <div>
+                              <p className="text-xs">Direkt TL olarak (sabit)</p>
+                              <p className="opacity-55 text-xs">Gramdan hesaplanan {fmtTRY(it.kalanValue)} ile fark: {it.sabitValue >= it.kalanValue ? "+" : "−"}{fmtTRY(Math.abs(it.sabitValue - it.kalanValue))}</p>
+                            </div>
+                            <p className="tab-num shrink-0">{fmtTRY(it.sabitValue)}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
