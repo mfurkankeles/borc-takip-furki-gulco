@@ -256,6 +256,8 @@ function payQty(p) {
 
 const MIG_KEMAL_SEP = "kemal-2026-09-07";
 const MIG_E5_TL = "e5-sabit-tl-1196800";
+// Borç tarihindeki fiyatla bugünkü fiyatın karşılaştırmasının (yalnızca bilgi) gösterileceği kişiler
+const INFO_COMPARE_PEOPLE = ["Metin Baba"];
 const ALL_MIGRATIONS = [MIG_KEMAL_SEP, MIG_E5_TL];
 
 function ensureShape(d) {
@@ -1184,6 +1186,36 @@ function App() {
                         )}
                       </div>
                     ))}
+                    {INFO_COMPARE_PEOPLE.includes(name) && (() => {
+                      const rows = group.items.filter((it) => it.kalan > 0.0001 && it.price > 0 && it.birimFiyat > 0);
+                      if (!rows.length) return null;
+                      return (
+                        <div className="rounded-md px-3 py-3 space-y-3" style={{ background: "#F6F1E4" }}>
+                          <div>
+                            <p className="text-xs font-medium">Bilgi · toplamlara dahil değil</p>
+                            <p className="text-xs opacity-60 mt-0.5">Borcu aldığınız günkü fiyat baz alınırsa, bugünkü fiyatla kaç gram/adet daha almanız gerekirdi.</p>
+                          </div>
+                          {rows.map((it) => {
+                            const tlThen = it.kalan * it.birimFiyat;
+                            const unitsNow = tlThen / it.price;
+                            const diff = unitsNow - it.kalan;
+                            return (
+                              <div key={it.id} className="text-xs flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm">{it.cins}</p>
+                                  <p className="opacity-60">
+                                    {fmtNum(it.kalan)} {it.unit} × {fmtTRY(it.birimFiyat)} = {fmtTRY(tlThen)} · bugünkü fiyat {fmtTRY(it.price)}/{it.unit} ile {fmtNum(unitsNow)} {it.unit} eder
+                                  </p>
+                                </div>
+                                <p className="tab-num shrink-0 text-sm" style={{ color: diff > 0 ? GOLD : GOOD }}>
+                                  {diff >= 0 ? "+" : "−"}{fmtNum(Math.abs(diff))} {it.unit}<span className="block text-xs opacity-60 text-right">{diff >= 0 ? "daha fazla" : "daha az"}</span>
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
