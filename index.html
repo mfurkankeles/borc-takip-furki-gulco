@@ -1199,6 +1199,7 @@ function App() {
                             const tlThen = it.kalan * it.birimFiyat;
                             const unitsNow = tlThen / it.price;
                             const diff = unitsNow - it.kalan;
+                            const tlDiff = tlThen - it.kalan * it.price;
                             return (
                               <div key={it.id} className="text-xs flex items-start justify-between gap-3">
                                 <div>
@@ -1208,11 +1209,23 @@ function App() {
                                   </p>
                                 </div>
                                 <p className="tab-num shrink-0 text-sm" style={{ color: diff > 0 ? GOLD : GOOD }}>
-                                  {diff >= 0 ? "+" : "−"}{fmtNum(Math.abs(diff))} {it.unit}<span className="block text-xs opacity-60 text-right">{diff >= 0 ? "daha fazla" : "daha az"}</span>
+                                  {diff >= 0 ? "+" : "−"}{fmtNum(Math.abs(diff))} {it.unit}<span className="block text-xs opacity-60 text-right">{diff >= 0 ? "daha fazla" : "daha az"}</span><span className="block text-xs text-right">≈ {tlDiff >= 0 ? "+" : "−"}{fmtTRY(Math.abs(tlDiff))}</span>
                                 </p>
                               </div>
                             );
                           })}
+                          {(() => {
+                            const tlDiffTotal = rows.reduce((sum, it) => sum + (it.kalan * it.birimFiyat - it.kalan * it.price), 0);
+                            return (
+                              <div className="border-t pt-2" style={{ borderColor: "#E4DCC2" }}>
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <p className="text-sm">Toplam fark (TL karşılığı)</p>
+                                  <p className="serif text-lg tab-num whitespace-nowrap shrink-0" style={{ color: tlDiffTotal > 0 ? GOLD : GOOD }}>{tlDiffTotal >= 0 ? "+" : "−"}{fmtTRY(Math.abs(tlDiffTotal))}</p>
+                                </div>
+                                <p className="text-xs opacity-50 mt-0.5">Yalnızca bilgi: toplam borca ve toplam emanete dahil edilmez.</p>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })()}
